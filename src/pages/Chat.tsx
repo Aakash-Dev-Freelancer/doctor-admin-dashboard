@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -38,7 +39,7 @@ const messageHistory: Record<number, Message[]> = {
 // Function to fetch patient data from Supabase
 const fetchPatients = async (): Promise<PatientChat[]> => {
   const { data, error } = await supabase
-    .from('patients')
+    .from('Patients')
     .select('id, first_name, last_name, phone_no, email');
 
   if (error) throw error;
