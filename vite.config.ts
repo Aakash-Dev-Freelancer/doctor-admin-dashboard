@@ -9,6 +9,8 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
   },
+  base: "/doctor-admin-dashboard",
+
   plugins: [
     react(),
     mode === 'development' &&
