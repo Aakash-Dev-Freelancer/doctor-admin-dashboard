@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -39,19 +38,18 @@ const messageHistory: Record<number, Message[]> = {
 // Function to fetch patient data from Supabase
 const fetchPatients = async (): Promise<PatientChat[]> => {
   const { data, error } = await supabase
-    .from('Patients')
+    .from('patients')
     .select('id, first_name, last_name, phone_no, email');
 
   if (error) throw error;
 
-  // Transform the data to match our PatientChat interface
   return (data || []).map((patient: Patient) => ({
     id: patient.id,
     name: `${patient.first_name || ''} ${patient.last_name || ''}`.trim(),
     lastMessage: "No messages yet",
-    avatar: undefined, // We don't have avatars in the database yet
+    avatar: undefined,
     unread: 0,
-    online: Math.random() > 0.5, // Random online status for demo purposes
+    online: Math.random() > 0.5,
   }));
 };
 
@@ -61,21 +59,21 @@ const Chat = () => {
   const [newMessage, setNewMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
 
-  // Fetch patients using React Query
   const { data: patientChats = [], isLoading, error } = useQuery({
     queryKey: ['patients'],
     queryFn: fetchPatients,
-    onError: (err) => {
-      console.error('Error fetching patients:', err);
-      toast({
-        title: "Error fetching patients",
-        description: "Could not load patient data. Please try again later.",
-        variant: "destructive",
-      });
+    meta: {
+      onError: (err: Error) => {
+        console.error('Error fetching patients:', err);
+        toast({
+          title: "Error fetching patients",
+          description: "Could not load patient data. Please try again later.",
+          variant: "destructive",
+        });
+      }
     }
   });
 
-  // Set the first patient as selected when data loads
   useEffect(() => {
     if (patientChats.length > 0 && !selectedPatient) {
       setSelectedPatient(patientChats[0]);
@@ -101,13 +99,11 @@ const Chat = () => {
     setMessages([...messages, newMsg]);
     setNewMessage("");
     
-    // Update the messageHistory object
     if (selectedPatient) {
       messageHistory[selectedPatient.id] = [...messages, newMsg];
     }
   };
 
-  // Display a loading state
   if (isLoading) {
     return (
       <div className="animate-fade-in h-[calc(100vh-6rem)] flex items-center justify-center">
