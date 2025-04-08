@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -7,15 +8,12 @@ import { Send, PhoneCall, Video, Search, MoreHorizontal, Paperclip } from "lucid
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { Patient, PatientChat } from "@/types/patient";
+import { useToast } from "@/components/ui/use-toast";
 
-const patients = [
-  { id: 1, name: "Maria Wilson", lastMessage: "When will my test results be available?", avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=crop&w=256&q=80", unread: 2, online: true },
-  { id: 2, name: "Robert Garcia", lastMessage: "I need to reschedule my appointment.", avatar: "https://images.unsplash.com/photo-1599566150163-29194dcaad36?ixlib=rb-1.2.1&auto=format&fit=crop&w=256&q=80", unread: 0, online: false },
-  { id: 3, name: "Laura Taylor", lastMessage: "Thank you for your help yesterday.", avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?ixlib=rb-1.2.1&auto=format&fit=crop&w=256&q=80", unread: 3, online: true },
-  { id: 4, name: "James Anderson", lastMessage: "Is it normal to experience these side effects?", avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?ixlib=rb-1.2.1&auto=format&fit=crop&w=256&q=80", unread: 0, online: false },
-  { id: 5, name: "Jennifer Lewis", lastMessage: "I'll send my insurance information today.", avatar: "https://images.unsplash.com/photo-1607746882042-944635dfe10e?ixlib=rb-1.2.1&auto=format&fit=crop&w=256&q=80", unread: 1, online: true },
-];
-
+// Sample message history - we would replace this with real data in a production app
 interface Message {
   id: number;
   sender: 'doctor' | 'patient';
@@ -38,18 +36,60 @@ const messageHistory: Record<number, Message[]> = {
   ],
 };
 
-const Chat = () => {
-  const [selectedPatient, setSelectedPatient] = useState(patients[0]);
-  const [newMessage, setNewMessage] = useState("");
-  const [messages, setMessages] = useState<Message[]>(messageHistory[1] || []);
+// Function to fetch patient data from Supabase
+const fetchPatients = async (): Promise<PatientChat[]> => {
+  const { data, error } = await supabase
+    .from('Patients')
+    .select('id, first_name, last_name, phone_no, email');
 
-  const handleSelectPatient = (patient: typeof patients[0]) => {
+  if (error) throw error;
+
+  // Transform the data to match our PatientChat interface
+  return (data || []).map((patient: Patient) => ({
+    id: patient.id,
+    name: `${patient.first_name || ''} ${patient.last_name || ''}`.trim(),
+    lastMessage: "No messages yet",
+    avatar: undefined, // We don't have avatars in the database yet
+    unread: 0,
+    online: Math.random() > 0.5, // Random online status for demo purposes
+  }));
+};
+
+const Chat = () => {
+  const { toast } = useToast();
+  const [selectedPatient, setSelectedPatient] = useState<PatientChat | null>(null);
+  const [newMessage, setNewMessage] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  // Fetch patients using React Query
+  const { data: patientChats = [], isLoading, error } = useQuery({
+    queryKey: ['patients'],
+    queryFn: fetchPatients,
+    onError: (err) => {
+      console.error('Error fetching patients:', err);
+      toast({
+        title: "Error fetching patients",
+        description: "Could not load patient data. Please try again later.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Set the first patient as selected when data loads
+  useEffect(() => {
+    if (patientChats.length > 0 && !selectedPatient) {
+      setSelectedPatient(patientChats[0]);
+      setMessages(messageHistory[patientChats[0].id] || []);
+    }
+  }, [patientChats, selectedPatient]);
+
+  const handleSelectPatient = (patient: PatientChat) => {
     setSelectedPatient(patient);
     setMessages(messageHistory[patient.id] || []);
   };
 
   const handleSendMessage = () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !selectedPatient) return;
     
     const newMsg: Message = {
       id: messages.length + 1,
@@ -62,8 +102,19 @@ const Chat = () => {
     setNewMessage("");
     
     // Update the messageHistory object
-    messageHistory[selectedPatient.id] = [...messages, newMsg];
+    if (selectedPatient) {
+      messageHistory[selectedPatient.id] = [...messages, newMsg];
+    }
   };
+
+  // Display a loading state
+  if (isLoading) {
+    return (
+      <div className="animate-fade-in h-[calc(100vh-6rem)] flex items-center justify-center">
+        <p>Loading patient chat data...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in h-[calc(100vh-6rem)]">
@@ -95,12 +146,12 @@ const Chat = () => {
               <TabsContent value="all" className="m-0 mt-2">
                 <ScrollArea className="h-[calc(100vh-20rem)]">
                   <div className="space-y-1 p-2">
-                    {patients.map(patient => (
+                    {patientChats.map(patient => (
                       <div 
                         key={patient.id}
                         className={cn(
                           "flex items-center space-x-3 p-2 rounded-md hover:bg-secondary/80 cursor-pointer",
-                          selectedPatient.id === patient.id && "bg-secondary"
+                          selectedPatient?.id === patient.id && "bg-secondary"
                         )}
                         onClick={() => handleSelectPatient(patient)}
                       >
@@ -133,12 +184,12 @@ const Chat = () => {
               <TabsContent value="unread" className="m-0 mt-2">
                 <ScrollArea className="h-[calc(100vh-20rem)]">
                   <div className="space-y-1 p-2">
-                    {patients.filter(p => p.unread > 0).map(patient => (
+                    {patientChats.filter(p => p.unread > 0).map(patient => (
                       <div 
                         key={patient.id}
                         className={cn(
                           "flex items-center space-x-3 p-2 rounded-md hover:bg-secondary/80 cursor-pointer",
-                          selectedPatient.id === patient.id && "bg-secondary"
+                          selectedPatient?.id === patient.id && "bg-secondary"
                         )}
                         onClick={() => handleSelectPatient(patient)}
                       >
@@ -171,12 +222,12 @@ const Chat = () => {
               <TabsContent value="online" className="m-0 mt-2">
                 <ScrollArea className="h-[calc(100vh-20rem)]">
                   <div className="space-y-1 p-2">
-                    {patients.filter(p => p.online).map(patient => (
+                    {patientChats.filter(p => p.online).map(patient => (
                       <div 
                         key={patient.id}
                         className={cn(
                           "flex items-center space-x-3 p-2 rounded-md hover:bg-secondary/80 cursor-pointer",
-                          selectedPatient.id === patient.id && "bg-secondary"
+                          selectedPatient?.id === patient.id && "bg-secondary"
                         )}
                         onClick={() => handleSelectPatient(patient)}
                       >
@@ -209,89 +260,101 @@ const Chat = () => {
           </CardContent>
         </Card>
         
-        <Card className="md:col-span-2 flex flex-col">
-          <CardHeader className="px-6 py-3 flex flex-row items-center justify-between border-b">
-            <div className="flex items-center gap-3">
-              <Avatar>
-                <AvatarImage src={selectedPatient.avatar} />
-                <AvatarFallback>{selectedPatient.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-              </Avatar>
-              <div>
-                <CardTitle className="text-lg">{selectedPatient.name}</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  {selectedPatient.online ? "Online" : "Offline"}
-                </p>
+        {selectedPatient ? (
+          <Card className="md:col-span-2 flex flex-col">
+            <CardHeader className="px-6 py-3 flex flex-row items-center justify-between border-b">
+              <div className="flex items-center gap-3">
+                <Avatar>
+                  <AvatarImage src={selectedPatient.avatar} />
+                  <AvatarFallback>{selectedPatient.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <CardTitle className="text-lg">{selectedPatient.name}</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedPatient.online ? "Online" : "Offline"}
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon">
-                <PhoneCall className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon">
-                <Video className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardHeader>
-          
-          <CardContent className="flex-1 p-0 flex flex-col">
-            <ScrollArea className="flex-1 p-6">
-              <div className="space-y-4">
-                {messages.map(message => (
-                  <div 
-                    key={message.id}
-                    className={cn(
-                      "flex",
-                      message.sender === 'doctor' ? "justify-end" : "justify-start"
-                    )}
-                  >
-                    <div className="flex flex-col max-w-[80%]">
-                      <div 
-                        className={cn(
-                          message.sender === 'doctor' ? "chat-message-sent ml-auto" : "chat-message-received"
-                        )}
-                      >
-                        {message.content}
-                      </div>
-                      <span className="text-xs text-muted-foreground mt-1 px-1">
-                        {message.timestamp}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-            
-            <div className="p-4 border-t">
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  <Paperclip className="h-4 w-4" />
+                <Button variant="ghost" size="icon">
+                  <PhoneCall className="h-4 w-4" />
                 </Button>
-                <Input 
-                  placeholder="Type your message here..." 
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      handleSendMessage();
-                    }
-                  }}
-                  className="flex-1"
-                />
-                <Button 
-                  onClick={handleSendMessage}
-                  disabled={!newMessage.trim()} 
-                  size="icon" 
-                  className="rounded-full bg-medical-800 hover:bg-medical-900"
-                >
-                  <Send className="h-4 w-4" />
+                <Button variant="ghost" size="icon">
+                  <Video className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon">
+                  <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </div>
+            </CardHeader>
+            
+            <CardContent className="flex-1 p-0 flex flex-col">
+              <ScrollArea className="flex-1 p-6">
+                <div className="space-y-4">
+                  {messages.map(message => (
+                    <div 
+                      key={message.id}
+                      className={cn(
+                        "flex",
+                        message.sender === 'doctor' ? "justify-end" : "justify-start"
+                      )}
+                    >
+                      <div className="flex flex-col max-w-[80%]">
+                        <div 
+                          className={cn(
+                            "rounded-lg px-4 py-2",
+                            message.sender === 'doctor' 
+                              ? "bg-primary text-primary-foreground ml-auto" 
+                              : "bg-muted"
+                          )}
+                        >
+                          {message.content}
+                        </div>
+                        <span className="text-xs text-muted-foreground mt-1 px-1">
+                          {message.timestamp}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+              
+              <div className="p-4 border-t">
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="rounded-full">
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+                  <Input 
+                    placeholder="Type your message here..." 
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSendMessage();
+                      }
+                    }}
+                    className="flex-1"
+                  />
+                  <Button 
+                    onClick={handleSendMessage}
+                    disabled={!newMessage.trim()} 
+                    size="icon" 
+                    className="rounded-full bg-medical-800 hover:bg-medical-900"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="md:col-span-2 flex items-center justify-center">
+            <div className="text-center p-8">
+              <h3 className="text-lg font-medium">Select a patient to start chatting</h3>
+              <p className="text-muted-foreground mt-2">Choose a patient from the list to view their conversation</p>
             </div>
-          </CardContent>
-        </Card>
+          </Card>
+        )}
       </div>
     </div>
   );
