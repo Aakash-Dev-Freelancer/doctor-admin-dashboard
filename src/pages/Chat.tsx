@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -74,11 +73,13 @@ const Chat = () => {
         <Card className="md:col-span-1">
           <CardHeader className="px-4 py-3">
             <div className="flex items-center space-x-2">
-              <Input 
-                placeholder="Search patients..." 
-                className="h-9" 
-                prefixIcon={<Search className="h-4 w-4 text-muted-foreground" />}
-              />
+              <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search patients..." 
+                  className="h-9 pl-9" 
+                />
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">

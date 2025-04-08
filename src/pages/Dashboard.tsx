@@ -1,8 +1,8 @@
-
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, MessageSquare, User, Clock, Check, X, Calendar as CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const Dashboard = () => {
   return (
